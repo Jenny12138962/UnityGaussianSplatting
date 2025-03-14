@@ -8,6 +8,7 @@ namespace CalmWater
     [RequireComponent(typeof(MeshRenderer))]
     public class MirrorReflection : MonoBehaviour
     {
+        //private RenderTexture rt;
         public LayerMask reflectionMask = -1;
 
         private enum QualityLevels
@@ -25,44 +26,45 @@ namespace CalmWater
         public Color clearColor = Color.grey;
         public bool reflectSkybox = true;
         public bool m_DisablePixelLights = false;
-        [Tooltip("You won't be able to select objects in the scene when this is active.")]
+        [Tooltip("You won't be able to select objects in the scene when thi is active.")]
         public bool UpdateSceneView = true;
-        public float clipPlaneOffset = 0.07f;
+        public float clipPlaneOffset = 0.07F;
 
-        private string reflectionSampler = "_ReflectionTex";
+        private String reflectionSampler = "_ReflectionTex";
 
-        private Camera m_ReflectionCamera;
-        private Material m_SharedMaterial;
-        private Dictionary<Camera, bool> m_HelperCameras;
+        Vector3 m_Oldpos;
+        Camera m_ReflectionCamera;
+        Material m_SharedMaterial;
+        Dictionary<Camera, bool> m_HelperCameras;
 
         void OnEnable()
         {
             gameObject.layer = LayerMask.NameToLayer("Water");
-            SetMaterial();
+            setMaterial();
         }
 
         void OnDisable()
         {
             if (m_ReflectionCamera != null)
             {
-                DestroyImmediate(m_ReflectionCamera.gameObject);
+                DestroyImmediate(m_ReflectionCamera);
             }
         }
 
         void Start()
         {
             gameObject.layer = LayerMask.NameToLayer("Water");
-            SetMaterial();
+            setMaterial();
         }
 
-        public void SetMaterial()
+        public void setMaterial()
         {
             m_SharedMaterial = GetComponent<Renderer>().sharedMaterial;
         }
 
         Camera CreateReflectionCameraFor(Camera cam)
         {
-            string reflName = $"{gameObject.name}Reflection{cam.name}";
+            String reflName = gameObject.name + "Reflection" + cam.name;
             GameObject go = GameObject.Find(reflName);
 
             if (!go)
@@ -70,21 +72,19 @@ namespace CalmWater
                 go = new GameObject(reflName, typeof(Camera));
                 go.hideFlags = HideFlags.HideAndDontSave;
             }
-
-            if (!go.TryGetComponent(out Camera reflectCamera))
+            if (!go.GetComponent(typeof(Camera)))
             {
-                reflectCamera = go.AddComponent<Camera>();
+                go.AddComponent(typeof(Camera));
             }
 
-            reflectCamera.CopyFrom(cam);
+            Camera reflectCamera = go.GetComponent<Camera>();
+
             reflectCamera.backgroundColor = clearColor;
             reflectCamera.clearFlags = reflectSkybox ? CameraClearFlags.Skybox : CameraClearFlags.SolidColor;
-            reflectCamera.renderingPath = RenderingPath.Forward;
-            reflectCamera.enabled = false;
 
-            SetStandardCameraParameters(reflectCamera, reflectionMask);
+            SetStandardCameraParameter(reflectCamera, reflectionMask);
 
-            if (reflectCamera.targetTexture == null)
+            if (!reflectCamera.targetTexture)
             {
                 reflectCamera.targetTexture = CreateTextureFor(cam);
             }
@@ -92,51 +92,68 @@ namespace CalmWater
             return reflectCamera;
         }
 
-        void SetStandardCameraParameters(Camera cam, LayerMask mask)
+        void SetStandardCameraParameter(Camera cam, LayerMask mask)
         {
             cam.cullingMask = mask & ~(1 << LayerMask.NameToLayer("Water"));
-            cam.depthTextureMode = DepthTextureMode.None;
+            cam.backgroundColor = Color.black;
+            cam.enabled = false;
         }
 
         RenderTexture CreateTextureFor(Camera cam)
         {
             int rtW = Mathf.FloorToInt(cam.pixelWidth / (int)Quality);
             int rtH = Mathf.FloorToInt(cam.pixelHeight / (int)Quality);
-            RenderTexture rt = new RenderTexture(rtW, rtH, 24, RenderTextureFormat.DefaultHDR);
-            rt.antiAliasing = 4;
+
+            RenderTexture rt = new RenderTexture(rtW, rtH, 24);
             rt.hideFlags = HideFlags.DontSave;
             return rt;
         }
 
         public void RenderHelpCameras(Camera currentCam)
         {
-            if (m_HelperCameras == null)
+            if (null == m_HelperCameras)
+            {
                 m_HelperCameras = new Dictionary<Camera, bool>();
+            }
 
             if (!m_HelperCameras.ContainsKey(currentCam))
+            {
                 m_HelperCameras.Add(currentCam, false);
+            }
 
             if (m_HelperCameras[currentCam] && !UpdateSceneView)
+            {
                 return;
+            }
 
-            if (m_ReflectionCamera == null)
+            if (!m_ReflectionCamera)
+            {
                 m_ReflectionCamera = CreateReflectionCameraFor(currentCam);
+            }
 
+            // 仅渲染反射相机到目标纹理，不影响主相机
             RenderReflectionFor(currentCam, m_ReflectionCamera);
+
             m_HelperCameras[currentCam] = true;
         }
 
         public void LateUpdate()
         {
-            if (m_HelperCameras != null)
+            if (null != m_HelperCameras)
+            {
                 m_HelperCameras.Clear();
+            }
         }
 
         public void WaterTileBeingRendered(Transform tr, Camera currentCam)
         {
             RenderHelpCameras(currentCam);
-            if (m_ReflectionCamera != null && m_SharedMaterial != null)
+
+            if (m_ReflectionCamera && m_SharedMaterial)
+            {
+                // 将反射纹理应用到水面材质上
                 m_SharedMaterial.SetTexture(reflectionSampler, m_ReflectionCamera.targetTexture);
+            }
         }
 
         public void OnWillRenderObject()
@@ -146,100 +163,115 @@ namespace CalmWater
 
         void RenderReflectionFor(Camera cam, Camera reflectCamera)
         {
-            if (reflectCamera == null || (m_SharedMaterial != null && !m_SharedMaterial.HasProperty(reflectionSampler)))
+            if (!reflectCamera)
+            {
                 return;
+            }
+
+            if (m_SharedMaterial && !m_SharedMaterial.HasProperty(reflectionSampler))
+            {
+                return;
+            }
 
 #if UNITY_EDITOR
-            // 动态调整反射纹理分辨率
             int rtW = Mathf.FloorToInt(cam.pixelWidth / (int)Quality);
             int rtH = Mathf.FloorToInt(cam.pixelHeight / (int)Quality);
-            if (reflectCamera.targetTexture.width != rtW || reflectCamera.targetTexture.height != rtH)
+
+            if (reflectCamera.targetTexture.width != rtW || reflectCamera.targetTexture.width != rtH)
             {
                 DestroyImmediate(reflectCamera.targetTexture);
                 reflectCamera.targetTexture = CreateTextureFor(cam);
             }
 #endif
 
-            // 保存原始像素灯光设置
-            int originalPixelLightCount = QualitySettings.pixelLightCount;
+            // Optionally disable pixel lights for reflection
+            int oldPixelLightCount = QualitySettings.pixelLightCount;
             if (m_DisablePixelLights)
+            {
                 QualitySettings.pixelLightCount = 0;
+            }
 
-            // 设置反射相机参数
             reflectCamera.cullingMask = reflectionMask & ~(1 << LayerMask.NameToLayer("Water"));
+
+            SaneCameraSettings(reflectCamera);
+
             reflectCamera.backgroundColor = clearColor;
             reflectCamera.clearFlags = reflectSkybox ? CameraClearFlags.Skybox : CameraClearFlags.SolidColor;
+            if (reflectSkybox)
+            {
+                if (cam.gameObject.GetComponent(typeof(Skybox)))
+                {
+                    Skybox sb = (Skybox)reflectCamera.gameObject.GetComponent(typeof(Skybox));
+                    if (!sb)
+                    {
+                        sb = (Skybox)reflectCamera.gameObject.AddComponent(typeof(Skybox));
+                    }
+                    sb.material = ((Skybox)cam.GetComponent(typeof(Skybox))).material;
+                }
+            }
 
-            // 精确镜像变换
-            Vector3 planePosition = transform.position;
-            Vector3 planeNormal = transform.up;
-            Matrix4x4 reflectionMatrix = CalculatePreciseReflectionMatrix(planePosition, planeNormal);
-            Vector3 reflectedPos = reflectionMatrix.MultiplyPoint(cam.transform.position);
-
-            // 设置反射相机矩阵
-            reflectCamera.worldToCameraMatrix = cam.worldToCameraMatrix * reflectionMatrix;
-
-            // 计算倾斜投影平面
-            Vector4 clipPlane = CameraSpacePlane(reflectCamera, planePosition, planeNormal, 1.0f);
-            reflectCamera.projectionMatrix = cam.projectionMatrix;
-            reflectCamera.projectionMatrix = CalculatePreciseObliqueMatrix(reflectCamera.projectionMatrix, clipPlane);
-
-            // 同步相机位置和旋转
-            reflectCamera.transform.position = reflectedPos;
-            reflectCamera.transform.rotation = Quaternion.LookRotation(
-                Vector3.Reflect(cam.transform.forward, planeNormal),
-                Vector3.Reflect(cam.transform.up, planeNormal)
-            );
-
-            // 渲染反射
             GL.invertCulling = true;
+
+            Transform reflectiveSurface = transform;
+
+            Vector3 eulerA = cam.transform.eulerAngles;
+
+            reflectCamera.transform.eulerAngles = new Vector3(-eulerA.x, eulerA.y, eulerA.z);
+            reflectCamera.transform.position = cam.transform.position;
+
+            Vector3 pos = reflectiveSurface.transform.position;
+            pos.y = reflectiveSurface.position.y;
+            Vector3 normal = reflectiveSurface.transform.up;
+            float d = -Vector3.Dot(normal, pos) - clipPlaneOffset;
+            Vector4 reflectionPlane = new Vector4(normal.x, normal.y, normal.z, d);
+
+            Matrix4x4 reflection = Matrix4x4.zero;
+            reflection = CalculateReflectionMatrix(reflection, reflectionPlane);
+            m_Oldpos = cam.transform.position;
+            Vector3 newpos = reflection.MultiplyPoint(m_Oldpos);
+
+            reflectCamera.worldToCameraMatrix = cam.worldToCameraMatrix * reflection;
+
+            Vector4 clipPlane = CameraSpacePlane(reflectCamera, pos, normal, 1.0f);
+
+            Matrix4x4 projection = cam.projectionMatrix;
+            projection = CalculateObliqueMatrix(projection, clipPlane);
+            reflectCamera.projectionMatrix = projection;
+
+            reflectCamera.transform.position = newpos;
+            Vector3 euler = cam.transform.eulerAngles;
+            reflectCamera.transform.eulerAngles = new Vector3(-euler.x, euler.y, euler.z);
+
+            // 渲染反射相机到目标纹理
             reflectCamera.Render();
+
             GL.invertCulling = false;
 
-            // 恢复像素灯光设置
+            // Restore pixel light count
             if (m_DisablePixelLights)
-                QualitySettings.pixelLightCount = originalPixelLightCount;
+            {
+                QualitySettings.pixelLightCount = oldPixelLightCount;
+            }
         }
 
-        // 高精度反射矩阵计算
-        Matrix4x4 CalculatePreciseReflectionMatrix(Vector3 planePos, Vector3 planeNormal)
+        void SaneCameraSettings(Camera helperCam)
         {
-            float d = -Vector3.Dot(planeNormal, planePos) - clipPlaneOffset;
-            Matrix4x4 reflectionMat = Matrix4x4.identity;
-
-            reflectionMat.m00 = 1 - 2 * planeNormal.x * planeNormal.x;
-            reflectionMat.m01 = -2 * planeNormal.x * planeNormal.y;
-            reflectionMat.m02 = -2 * planeNormal.x * planeNormal.z;
-            reflectionMat.m03 = -2 * d * planeNormal.x;
-
-            reflectionMat.m10 = -2 * planeNormal.y * planeNormal.x;
-            reflectionMat.m11 = 1 - 2 * planeNormal.y * planeNormal.y;
-            reflectionMat.m12 = -2 * planeNormal.y * planeNormal.z;
-            reflectionMat.m13 = -2 * d * planeNormal.y;
-
-            reflectionMat.m20 = -2 * planeNormal.z * planeNormal.x;
-            reflectionMat.m21 = -2 * planeNormal.z * planeNormal.y;
-            reflectionMat.m22 = 1 - 2 * planeNormal.z * planeNormal.z;
-            reflectionMat.m23 = -2 * d * planeNormal.z;
-
-            reflectionMat.m33 = 1;
-
-            return reflectionMat;
+            helperCam.depthTextureMode = DepthTextureMode.None;
+            helperCam.backgroundColor = Color.black;
+            helperCam.clearFlags = CameraClearFlags.SolidColor;
+            helperCam.renderingPath = RenderingPath.Forward;
         }
 
-        // 高精度倾斜投影矩阵
-        Matrix4x4 CalculatePreciseObliqueMatrix(Matrix4x4 projection, Vector4 clipPlane)
+        static Matrix4x4 CalculateObliqueMatrix(Matrix4x4 projection, Vector4 clipPlane)
         {
             Vector4 q = projection.inverse * new Vector4(
-                Mathf.Sign(clipPlane.x),
-                Mathf.Sign(clipPlane.y),
-                1.0f,
-                1.0f
+                Sgn(clipPlane.x),
+                Sgn(clipPlane.y),
+                1.0F,
+                1.0F
             );
-
-            Vector4 c = clipPlane * (2.0f / Vector4.Dot(clipPlane, q));
-
-            // 精确修改投影矩阵第三行
+            Vector4 c = clipPlane * (2.0F / (Vector4.Dot(clipPlane, q)));
+            // third row = clip plane - fourth row
             projection[2] = c.x - projection[3];
             projection[6] = c.y - projection[7];
             projection[10] = c.z - projection[11];
@@ -248,16 +280,52 @@ namespace CalmWater
             return projection;
         }
 
-        // 摄像机空间平面计算（双精度中间计算）
+        static Matrix4x4 CalculateReflectionMatrix(Matrix4x4 reflectionMat, Vector4 plane)
+        {
+            reflectionMat.m00 = (1.0F - 2.0F * plane[0] * plane[0]);
+            reflectionMat.m01 = (-2.0F * plane[0] * plane[1]);
+            reflectionMat.m02 = (-2.0F * plane[0] * plane[2]);
+            reflectionMat.m03 = (-2.0F * plane[3] * plane[0]);
+
+            reflectionMat.m10 = (-2.0F * plane[1] * plane[0]);
+            reflectionMat.m11 = (1.0F - 2.0F * plane[1] * plane[1]);
+            reflectionMat.m12 = (-2.0F * plane[1] * plane[2]);
+            reflectionMat.m13 = (-2.0F * plane[3] * plane[1]);
+
+            reflectionMat.m20 = (-2.0F * plane[2] * plane[0]);
+            reflectionMat.m21 = (-2.0F * plane[2] * plane[1]);
+            reflectionMat.m22 = (1.0F - 2.0F * plane[2] * plane[2]);
+            reflectionMat.m23 = (-2.0F * plane[3] * plane[2]);
+
+            reflectionMat.m30 = 0.0F;
+            reflectionMat.m31 = 0.0F;
+            reflectionMat.m32 = 0.0F;
+            reflectionMat.m33 = 1.0F;
+
+            return reflectionMat;
+        }
+
+        static float Sgn(float a)
+        {
+            if (a > 0.0F)
+            {
+                return 1.0F;
+            }
+            if (a < 0.0F)
+            {
+                return -1.0F;
+            }
+            return 0.0F;
+        }
+
         Vector4 CameraSpacePlane(Camera cam, Vector3 pos, Vector3 normal, float sideSign)
         {
+            Vector3 offsetPos = pos + normal * clipPlaneOffset;
             Matrix4x4 m = cam.worldToCameraMatrix;
-            Vector3 cpos = m.MultiplyPoint(pos + normal * clipPlaneOffset);
+            Vector3 cpos = m.MultiplyPoint(offsetPos);
             Vector3 cnormal = m.MultiplyVector(normal).normalized * sideSign;
 
-            // 使用双精度计算避免累计误差
-            double dot = Vector3.Dot(cpos, cnormal);
-            return new Vector4(cnormal.x, cnormal.y, cnormal.z, -(float)dot);
+            return new Vector4(cnormal.x, cnormal.y, cnormal.z, -Vector3.Dot(cpos, cnormal));
         }
     }
 }

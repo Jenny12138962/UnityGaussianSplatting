@@ -7966,9 +7966,9 @@ Transform:
   m_LocalScale: {x: 0.015, y: 0.015, z: 0.015}
   m_ConstrainProportionsScale: 1
   m_Children:
+  - {fileID: 375760657}
   - {fileID: 2016656404184040742}
   - {fileID: 3773903475738271319}
-  - {fileID: 375760657}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 208, z: 0}
 --- !u!4 &2793928088945428867
@@ -9045,7 +9045,7 @@ GameObject:
   - component: {fileID: 3310439167893400409}
   - component: {fileID: 3310439167893400408}
   m_Layer: 0
-  m_Name: "\u8239-02"
+  m_Name: Ship
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

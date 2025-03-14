@@ -1,30 +1,27 @@
 ﻿using UnityEngine;
+using System.Collections;
 
-namespace CalmWater
-{
-    public class MaterialSwitcher : MonoBehaviour
-    {
-        public MeshRenderer WaterPlane;
-        public Material ClassicMat;
-        public Material DX11Mat;
+namespace CalmWater {
+	public class MaterialSwitcher : MonoBehaviour {
 
-        private MirrorReflection mirrorRef;
+		public MeshRenderer WaterPlane;
+		public Material ClassicMat;
+		public Material DX11Mat;
 
-        void Start()
-        {
-            mirrorRef = WaterPlane.GetComponent<MirrorReflection>();
-        }
+		private MirrorReflection m;
 
-        public void SetDX11Mat()
-        {
-            WaterPlane.material = DX11Mat;
-            mirrorRef.SetMaterial(); // 调用公开方法
-        }
+		void Start(){
+			m = WaterPlane.GetComponent<MirrorReflection> ();	
+		}
 
-        public void SetClassicMat()
-        {
-            WaterPlane.material = ClassicMat;
-            mirrorRef.SetMaterial(); // 调用公开方法
-        }
-    }
+		public void SetDX11Mat(){
+			WaterPlane.material = DX11Mat;
+			m.setMaterial ();
+		}
+
+		public void SetClassicMat(){
+			WaterPlane.material = ClassicMat;
+			m.setMaterial ();
+		}
+	}
 }
